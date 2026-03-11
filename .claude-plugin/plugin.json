@@ -1,0 +1,11 @@
+{
+  "name": "api-contract-forge",
+  "description": "Universal API contract skill. Build new APIs with best contracting standards for any tech stack, infer types from JSON responses, detect inconsistencies, and generate contract artifacts.",
+  "version": "1.0.0",
+  "author": {
+    "name": "rumitdev"
+  },
+  "homepage": "https://github.com/rumitdev/claude-api-contract-forge",
+  "repository": "https://github.com/rumitdev/claude-api-contract-forge",
+  "license": "MIT"
+}
