@@ -1,6 +1,6 @@
 # API Contract Forge
 
-A Claude Code plugin for API contracting. Build new APIs with best practices or analyze existing API responses to generate typed contracts.
+A Claude skill for API contracting. Build new APIs with best practices or analyze existing API responses to generate typed contracts.
 
 ## Features
 
@@ -29,10 +29,24 @@ A Claude Code plugin for API contracting. Build new APIs with best practices or 
 | Laravel | PHP | Controller, FormRequest, Resource, Model, Migration |
 | Rails | Ruby | Controller, Model, Serializer, Migration, Route |
 
-## Installation
+## Skill Structure
 
-```bash
-/plugin install https://github.com/rumitdev/claude-api-contract-forge
+```
+api-contract-forge/
+├── SKILL.md                              # Core workflow (~470 lines)
+├── references/
+│   ├── build-express.md                  # Express + TypeScript templates
+│   ├── build-nestjs.md                   # NestJS templates
+│   ├── build-fastapi.md                  # FastAPI + Python templates
+│   ├── build-django.md                   # Django REST templates
+│   ├── build-go.md                       # Go (Gin/Echo/Chi) templates
+│   ├── build-spring-boot.md              # Spring Boot Kotlin/Java templates
+│   ├── build-laravel.md                  # Laravel PHP templates
+│   ├── build-rails.md                    # Rails Ruby templates
+│   ├── analyze-generators.md             # All 8 language generators
+│   └── industry-standards.md             # Standards 1-10 (OWASP, RFC 9457, etc.)
+└── evals/
+    └── evals.json                        # Test cases
 ```
 
 ## Usage
@@ -55,7 +69,7 @@ Just tell Claude what you need:
 
 ## Trigger Keywords
 
-`build api` | `new endpoint` | `api contract` | `generate types` | `infer schema` | `normalize API` | `scaffold api` | `create api for [resource]`
+`build api` | `new endpoint` | `api contract` | `generate types` | `infer schema` | `normalize API` | `scaffold api` | `create api for [resource]` | `type safety` | `breaking changes` | `API schema`
 
 ## License
 
