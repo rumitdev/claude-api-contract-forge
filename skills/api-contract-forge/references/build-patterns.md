@@ -392,7 +392,10 @@ export const {resource}QuerySchema = z.object({
     .optional()
     .transform((val) => val?.split(",").map((s) => s.trim()))
     .pipe(
-      z.array(z.enum(["company", "items", "assignee", "tags"])).optional()
+      z.array(z.enum([
+        "company", "items", "assignee", "tags",       // Level 1
+        "company.address", "items.product",            // Level 2 (dot notation)
+      ])).optional()
     ),
 });
 ```
@@ -405,15 +408,16 @@ class {Resource}QueryParams(BaseModel):
     # ... existing pagination
     include: Optional[str] = Field(
         None,
-        description="Comma-separated relations to include: company,items,assignee",
-        example="company,items",
+        description="Comma-separated relations to include. Use dot notation for nested: profile.skills",
+        example="profile.skills,company",
     )
 
     @property
     def include_list(self) -> List[str]:
         if not self.include:
             return []
-        allowed = {"company", "items", "assignee", "tags"}
+        allowed = {"company", "items", "assignee", "tags",
+                   "company.address", "items.product"}  # Level 2 includes
         requested = {s.strip() for s in self.include.split(",")}
         return list(requested & allowed)  # Only return allowed relations
 ```
@@ -521,6 +525,96 @@ public function index(Request $request)
     }
     // ...
 }
+```
+
+### Nested Includes (Dot Notation)
+
+For multi-level nesting like `?include=profile.skills`, the ORM needs to load nested relations:
+
+**Prisma (Express/NestJS):**
+```typescript
+// Parse "profile.skills" into nested Prisma include
+function buildPrismaInclude(includes: string[], allowedTree: Record<string, string[]>) {
+  const result: Record<string, any> = {};
+  for (const inc of includes) {
+    const parts = inc.split(".");
+    if (parts.length === 1 && parts[0] in allowedTree) {
+      result[parts[0]] = true;
+    } else if (parts.length === 2 && parts[0] in allowedTree && allowedTree[parts[0]].includes(parts[1])) {
+      // Nested: profile.skills → { profile: { include: { skills: true } } }
+      result[parts[0]] = { include: { [parts[1]]: true } };
+    }
+  }
+  return result;
+}
+
+// Usage:
+const allowedTree = {
+  profile: ["skills", "certifications"],
+  company: ["departments"],
+};
+const include = buildPrismaInclude(query.include, allowedTree);
+// ?include=profile.skills → { profile: { include: { skills: true } } }
+```
+
+**SQLAlchemy (FastAPI/Django):**
+```python
+from sqlalchemy.orm import joinedload
+
+def build_eager_loading(query, includes, allowed_tree):
+    for inc in includes:
+        parts = inc.split(".")
+        if len(parts) == 1 and parts[0] in allowed_tree:
+            query = query.options(joinedload(getattr(Model, parts[0])))
+        elif len(parts) == 2 and parts[0] in allowed_tree:
+            if parts[1] in allowed_tree[parts[0]]:
+                # profile.skills → joinedload(User.profile).joinedload(Profile.skills)
+                parent = joinedload(getattr(Model, parts[0]))
+                query = query.options(parent.joinedload(getattr(ParentModel, parts[1])))
+    return query
+```
+
+**Laravel:**
+```php
+// ?include=profile.skills → with(['profile.skills'])
+// Laravel supports dot notation natively
+$allowed = ['profile', 'profile.skills', 'company', 'company.departments'];
+$requested = array_intersect(explode(',', $include), $allowed);
+$query->with($requested);
+```
+
+**Rails:**
+```ruby
+# ?include=profile.skills → includes(profile: :skills)
+allowed_tree = {
+  'profile' => [],
+  'profile.skills' => [:profile, { profile: :skills }],
+  'company' => [],
+}
+requested.each do |inc|
+  if allowed_tree.key?(inc)
+    case inc
+    when 'profile.skills'
+      resources = resources.includes(profile: :skills)
+    when 'profile'
+      resources = resources.includes(:profile)
+    end
+  end
+end
+```
+
+**Null Handling at Each Level:**
+
+When a parent relation is null, nested loading stops gracefully:
+
+```typescript
+// Prisma handles this automatically:
+// User has no profile → profile: null, skills not loaded
+// User has profile but no skills → profile: { ..., skills: [] }
+
+// In your serializer/response, ensure:
+// - null parent → "profile": null (don't crash on .skills of null)
+// - empty array → "skills": [] (never null)
 ```
 
 ### Swagger Documentation

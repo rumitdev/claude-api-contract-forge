@@ -1,5 +1,7 @@
 # Laravel (PHP) — Build Templates
 
+> **Response contract:** All responses MUST follow the standard envelope defined in `references/response-contract.md`.
+
 Use these templates when the project detection (Step 0.1) identifies Laravel. Adapt all placeholder tokens to the actual resource name.
 
 Generate: Controller, FormRequest, API Resource, Model, Migration, Route. Generate only the operations the user requested.
@@ -124,31 +126,59 @@ class {Resource}Controller extends Controller
             $query->where('status', $status);
         }
 
-        $limit = min($request->query('limit', 10), 100);
-        $paginated = $query->orderByDesc('created_at')->paginate($limit);
+        $page = max((int) $request->query('page', 1), 1);
+        $limit = min(max((int) $request->query('limit', 10), 1), 100);
+        $total = $query->count();
+        $items = $query->orderByDesc('created_at')
+            ->skip(($page - 1) * $limit)
+            ->take($limit)
+            ->get();
 
-        return {Resource}Resource::collection($paginated);
+        return response()->json([
+            'statusCode' => 200,
+            'message' => 'Data retrieved',
+            'data' => [
+                'items' => {Resource}Resource::collection($items),
+                'total' => $total,
+                'page' => $page,
+                'limit' => $limit,
+                'totalPages' => (int) ceil($total / $limit),
+            ],
+        ]);
     }
 
     public function store(Create{Resource}Request $request)
     {
         $resource = {Resource}::create($request->validated());
-        return (new {Resource}Resource($resource))
-            ->response()
-            ->setStatusCode(201);
+
+        return response()->json([
+            'statusCode' => 201,
+            'message' => '{Resource} created',
+            'data' => new {Resource}Resource($resource),
+        ], 201);
     }
 
     public function show(string $id)
     {
         $resource = {Resource}::findOrFail($id);
-        return new {Resource}Resource($resource);
+
+        return response()->json([
+            'statusCode' => 200,
+            'message' => '{Resource} retrieved',
+            'data' => new {Resource}Resource($resource),
+        ]);
     }
 
     public function update(Update{Resource}Request $request, string $id)
     {
         $resource = {Resource}::findOrFail($id);
         $resource->update($request->validated());
-        return new {Resource}Resource($resource->fresh());
+
+        return response()->json([
+            'statusCode' => 200,
+            'message' => '{Resource} updated',
+            'data' => new {Resource}Resource($resource->fresh()),
+        ]);
     }
 
     public function destroy(string $id)
@@ -232,3 +262,76 @@ Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
 ```
 
 `Route::apiResource` automatically wires index, store, show, update, destroy to the controller. If the user requested only specific operations, use individual `Route::get`, `Route::post`, etc. instead.
+
+---
+
+## File 7: Exception Handler — `app/Exceptions/Handler.php`
+
+Override the default exception handler to return errors in the standard contract format:
+
+```php
+<?php
+
+namespace App\Exceptions;
+
+use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
+use Throwable;
+
+class Handler extends ExceptionHandler
+{
+    public function render($request, Throwable $e)
+    {
+        if ($request->expectsJson() || $request->is('api/*')) {
+            return $this->renderApiException($request, $e);
+        }
+
+        return parent::render($request, $e);
+    }
+
+    protected function renderApiException($request, Throwable $e)
+    {
+        if ($e instanceof ValidationException) {
+            return response()->json([
+                'type' => 'validation_error',
+                'title' => 'Validation Failed',
+                'status' => 422,
+                'detail' => 'One or more fields failed validation.',
+                'traceId' => request()->header('X-Trace-Id', (string) \Illuminate\Support\Str::uuid()),
+                'errors' => collect($e->errors())->flatMap(fn ($messages, $field) =>
+                    collect($messages)->map(fn ($msg) => [
+                        'field' => $field,
+                        'message' => $msg,
+                    ])
+                )->values()->all(),
+            ], 422);
+        }
+
+        if ($e instanceof ModelNotFoundException) {
+            return response()->json([
+                'type' => 'not_found',
+                'title' => 'Resource Not Found',
+                'status' => 404,
+                'detail' => 'The requested resource was not found.',
+                'traceId' => request()->header('X-Trace-Id', (string) \Illuminate\Support\Str::uuid()),
+                'errors' => [],
+            ], 404);
+        }
+
+        $status = $e instanceof HttpException ? $e->getStatusCode() : 500;
+
+        return response()->json([
+            'type' => 'server_error',
+            'title' => 'Internal Server Error',
+            'status' => $status,
+            'detail' => app()->isProduction() ? 'An unexpected error occurred.' : $e->getMessage(),
+            'traceId' => request()->header('X-Trace-Id', (string) \Illuminate\Support\Str::uuid()),
+            'errors' => [],
+        ], $status);
+    }
+}
+```
+
+This ensures all error responses — validation, not-found, and server errors — follow the standard error contract with `type`, `title`, `status`, `detail`, `traceId`, and `errors` fields.

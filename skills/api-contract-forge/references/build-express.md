@@ -1,5 +1,7 @@
 # Express + TypeScript — Build Templates
 
+> **Response contract:** All responses MUST conform to the standard envelope defined in [`references/response-contract.md`](./response-contract.md). See that file for the canonical single-item, list, delete, and error shapes.
+
 Use these templates when the project detection (Step 0.1) identifies Express as the framework. Adapt all placeholder tokens (`{resource}`, `{Resource}`, `{resources}`, `{Resources}`, `{RESOURCE}`) to the actual resource name.
 
 Generate only the files needed for the operations the user requested. If they asked for only Create (POST), skip update schemas, list queries, and the corresponding route/controller/service methods.
@@ -159,6 +161,8 @@ Every route needs `@swagger` JSDoc. Include `tags`, `security`, `parameters`, `r
 
 ## File 3: Controller — `src/controllers/{resource}.controller.ts`
 
+> **Important:** The response helpers (`sendSuccess`, `sendPaginatedResponse`, `sendError`) used below MUST produce the standard envelope defined in [`references/response-contract.md`](./response-contract.md). Do not use raw `res.json()` — always go through these helpers to guarantee contract compliance.
+
 ```typescript
 import { Request, Response, NextFunction } from "express";
 // Use detected response helpers
@@ -169,8 +173,10 @@ export class {Resource}Controller {
   async create{Resource}(req: Request, res: Response): Promise<void> {
     try {
       const result = await {resource}Service.create(req.body);
+      // sendSuccess produces: { statusCode: 201, message: "...", data: { ...result } }
       sendSuccess(res, result, req.t("{RESOURCE}_CREATED"), 201);
     } catch (error: any) {
+      // sendError produces: { type: "...", title: "...", status: N, detail: "...", traceId: "...", errors: [...] }
       sendError(res, req.t(error.message), error.statusCode || 500);
     }
   }
@@ -179,13 +185,17 @@ export class {Resource}Controller {
     try {
       const { items, total } = await {resource}Service.findAll(req.query as any);
       const { page, limit } = req.query as any;
+      // sendPaginatedResponse produces:
+      // { statusCode: 200, message: "...", data: { items: [...], total, page, limit, totalPages } }
       sendPaginatedResponse(res, items, total, page, limit, req.t("DATA_RETRIEVED"));
     } catch (error: any) {
       sendError(res, req.t("REQUEST_FAILED"), 500, error.message);
     }
   }
 
-  // getById, update, delete — same pattern
+  // getById  — use sendSuccess  -> { statusCode: 200, message, data }
+  // update   — use sendSuccess  -> { statusCode: 200, message, data }
+  // delete   — use res.status(204).send()  (empty body, no JSON envelope)
 }
 
 export const {resource}Controller = new {Resource}Controller();

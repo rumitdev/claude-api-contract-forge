@@ -1,5 +1,7 @@
 # Django REST Framework — Build Templates
 
+> **Response contract:** All endpoints MUST conform to the envelope defined in `references/response-contract.md`.
+
 Use these templates when the project detection (Step 0.1) identifies Django REST Framework. Adapt all placeholder tokens to the actual resource name. Use snake_case per Python/Django conventions.
 
 Generate: Model, Serializer, ViewSet, URL config, Permissions. Generate only the operations the user requested.
@@ -71,8 +73,9 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import {Resource}
 from .serializers import {Resource}Serializer, Create{Resource}Serializer
+from core.mixins import EnvelopeResponseMixin  # see File 6 below
 
-class {Resource}ViewSet(viewsets.ModelViewSet):
+class {Resource}ViewSet(EnvelopeResponseMixin, viewsets.ModelViewSet):
     queryset = {Resource}.objects.all()
     serializer_class = {Resource}Serializer
     permission_classes = [permissions.IsAuthenticated]
@@ -90,6 +93,8 @@ class {Resource}ViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 ```
+
+The `EnvelopeResponseMixin` (defined below in File 6) automatically wraps every response in the standard `{statusCode, message, data}` envelope. Paginated list responses are handled by the custom pagination class (File 7).
 
 ---
 
@@ -127,12 +132,149 @@ python manage.py migrate
 
 ---
 
-## Pagination (project-level)
+## File 6: Response Envelope Mixin — `core/mixins.py`
 
-If not already configured, add to `settings.py`:
+This mixin wraps every non-paginated response in the standard envelope. Place it in a shared `core` app.
+
+```python
+from rest_framework.response import Response
+
+
+class EnvelopeResponseMixin:
+    """
+    Wraps all ViewSet responses in the standard API envelope:
+      { "statusCode": N, "message": "...", "data": { ... } }
+
+    Paginated responses are handled by StandardPagination (File 7) instead.
+    Delete (204) is left as-is (empty body).
+    """
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+
+        # Skip wrapping for: non-2xx, 204 No Content, or already-paginated responses
+        if (
+            not (200 <= response.status_code < 300)
+            or response.status_code == 204
+            or getattr(response, "is_paginated", False)
+        ):
+            return response
+
+        # Avoid double-wrapping if data already has the envelope
+        if isinstance(response.data, dict) and "statusCode" in response.data:
+            return response
+
+        action = getattr(self, "action", None)
+        message_map = {
+            "create": "{Resource} created",
+            "retrieve": "{Resource} retrieved",
+            "update": "{Resource} updated",
+            "partial_update": "{Resource} updated",
+            "list": "{Resources} retrieved",
+        }
+        message = message_map.get(action, "Success")
+
+        response.data = {
+            "statusCode": response.status_code,
+            "message": message,
+            "data": response.data,
+        }
+        return response
+```
+
+---
+
+## File 7: Custom Pagination — `core/pagination.py`
+
+DRF's default pagination returns `{count, next, previous, results}` which does not match the contract. Use this custom class instead.
+
+```python
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.response import Response
+import math
+
+
+class StandardPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = "limit"
+    max_page_size = 100
+    page_query_param = "page"
+
+    def get_paginated_response(self, data):
+        total = self.page.paginator.count
+        page = self.page.number
+        limit = self.get_page_size(self.request)
+        total_pages = math.ceil(total / limit) if limit else 0
+
+        response = Response({
+            "statusCode": 200,
+            "message": "Items retrieved",
+            "data": {
+                "items": data,
+                "total": total,
+                "page": page,
+                "limit": limit,
+                "totalPages": total_pages,
+            },
+        })
+        response.is_paginated = True  # tells EnvelopeResponseMixin to skip wrapping
+        return response
+```
+
+---
+
+## File 8: Custom Exception Handler — `core/exception_handler.py`
+
+DRF's default error format (`{field: [errors]}`) does not match the contract. Register this handler to produce the standard error envelope.
+
+```python
+from rest_framework.views import exception_handler
+from rest_framework.exceptions import ValidationError
+import uuid
+
+
+def standard_exception_handler(exc, context):
+    response = exception_handler(exc, context)
+
+    if response is None:
+        return response
+
+    errors = []
+    if isinstance(exc, ValidationError) and isinstance(response.data, dict):
+        for field, messages in response.data.items():
+            if isinstance(messages, list):
+                for msg in messages:
+                    errors.append({"field": field, "message": str(msg)})
+            else:
+                errors.append({"field": field, "message": str(messages)})
+        detail = "One or more fields failed validation."
+        title = "Validation Error"
+    else:
+        detail = str(response.data.get("detail", "An error occurred"))
+        title = detail
+        errors = []
+
+    response.data = {
+        "type": "about:blank",
+        "title": title,
+        "status": response.status_code,
+        "detail": detail,
+        "traceId": str(uuid.uuid4()),
+        "errors": errors,
+    }
+    return response
+```
+
+---
+
+## Pagination & Exception Handler (project-level `settings.py`)
+
+Register the custom pagination class and exception handler:
+
 ```python
 REST_FRAMEWORK = {
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "DEFAULT_PAGINATION_CLASS": "core.pagination.StandardPagination",
     "PAGE_SIZE": 10,
+    "EXCEPTION_HANDLER": "core.exception_handler.standard_exception_handler",
 }
 ```

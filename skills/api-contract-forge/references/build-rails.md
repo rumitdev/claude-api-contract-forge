@@ -1,5 +1,7 @@
 # Ruby on Rails — Build Templates
 
+> **Response contract:** All responses MUST follow the standard envelope defined in `references/response-contract.md`.
+
 Use these templates when the project detection (Step 0.1) identifies Rails. Adapt all placeholder tokens to the actual resource name. Use snake_case per Ruby conventions.
 
 Generate: Controller, Model, Serializer, Migration, Route, Request validation. Generate only the operations the user requested.
@@ -36,13 +38,13 @@ Using `active_model_serializers` or `jsonapi-serializer` (detect from Gemfile):
 ```ruby
 # With active_model_serializers
 class {Resource}Serializer < ActiveModel::Serializer
-  attributes :id, :title, :amount, :status, :created_at, :updated_at
+  attributes :id, :title, :amount, :status, :createdAt, :updatedAt
 
-  def created_at
+  def createdAt
     object.created_at.iso8601
   end
 
-  def updated_at
+  def updatedAt
     object.updated_at.iso8601
   end
 end
@@ -53,8 +55,8 @@ If the project uses `jbuilder` instead:
 ```ruby
 # app/views/{resources}/show.json.jbuilder
 json.extract! @{resource}, :id, :title, :amount, :status
-json.created_at @{resource}.created_at.iso8601
-json.updated_at @{resource}.updated_at.iso8601
+json.createdAt @{resource}.created_at.iso8601
+json.updatedAt @{resource}.updated_at.iso8601
 ```
 
 ---
@@ -84,11 +86,15 @@ module Api
         {resources} = {resources}.offset((page - 1) * limit).limit(limit)
 
         render json: {
-          items: ActiveModelSerializers::SerializableResource.new({resources}),
-          total: total,
-          page: page,
-          limit: limit,
-          totalPages: (total.to_f / limit).ceil
+          statusCode: 200,
+          message: "Data retrieved",
+          data: {
+            items: ActiveModelSerializers::SerializableResource.new({resources}),
+            total: total,
+            page: page,
+            limit: limit,
+            totalPages: (total.to_f / limit).ceil
+          }
         }
       end
 
@@ -97,23 +103,35 @@ module Api
         {resource} = {Resource}.new({resource}_params)
 
         if {resource}.save
-          render json: {resource}, serializer: {Resource}Serializer, status: :created
+          render json: {
+            statusCode: 201,
+            message: "{Resource} created",
+            data: {Resource}Serializer.new({resource})
+          }, status: :created
         else
-          render json: { errors: {resource}.errors.full_messages }, status: :unprocessable_entity
+          render json: error_response({resource}), status: :unprocessable_entity
         end
       end
 
       # GET /api/v1/{resources}/:id
       def show
-        render json: @{resource}, serializer: {Resource}Serializer
+        render json: {
+          statusCode: 200,
+          message: "{Resource} retrieved",
+          data: {Resource}Serializer.new(@{resource})
+        }
       end
 
       # PUT /api/v1/{resources}/:id
       def update
         if @{resource}.update({resource}_params)
-          render json: @{resource}, serializer: {Resource}Serializer
+          render json: {
+            statusCode: 200,
+            message: "{Resource} updated",
+            data: {Resource}Serializer.new(@{resource})
+          }
         else
-          render json: { errors: @{resource}.errors.full_messages }, status: :unprocessable_entity
+          render json: error_response(@{resource}), status: :unprocessable_entity
         end
       end
 
@@ -131,6 +149,17 @@ module Api
 
       def {resource}_params
         params.require(:{resource}).permit(:title, :amount, :status)
+      end
+
+      def error_response(resource)
+        {
+          type: "validation_error",
+          title: "Validation Failed",
+          status: 422,
+          detail: "One or more fields failed validation.",
+          traceId: request.headers["X-Trace-Id"] || SecureRandom.uuid,
+          errors: resource.errors.map { |e| { field: e.attribute.to_s.camelize(:lower), message: e.full_message } }
+        }
       end
     end
   end
@@ -174,3 +203,42 @@ end
 ```
 
 If the user requested only specific operations, use the `only` option to limit which routes are generated.
+
+---
+
+## File 6: Error Handling — `app/controllers/application_controller.rb`
+
+Add `rescue_from` blocks to `ApplicationController` so all API errors follow the standard contract:
+
+```ruby
+class ApplicationController < ActionController::API
+  rescue_from ActiveRecord::RecordNotFound, with: :not_found
+  rescue_from StandardError, with: :internal_error
+
+  private
+
+  def not_found(exception)
+    render json: {
+      type: "not_found",
+      title: "Resource Not Found",
+      status: 404,
+      detail: exception.message,
+      traceId: request.headers["X-Trace-Id"] || SecureRandom.uuid,
+      errors: []
+    }, status: :not_found
+  end
+
+  def internal_error(exception)
+    render json: {
+      type: "server_error",
+      title: "Internal Server Error",
+      status: 500,
+      detail: Rails.env.production? ? "An unexpected error occurred." : exception.message,
+      traceId: request.headers["X-Trace-Id"] || SecureRandom.uuid,
+      errors: []
+    }, status: :internal_server_error
+  end
+end
+```
+
+This ensures all error responses — validation, not-found, and server errors — follow the standard error contract with `type`, `title`, `status`, `detail`, `traceId`, and `errors` fields. Validation errors are handled inline in the controller via the `error_response` helper.

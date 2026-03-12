@@ -1,5 +1,7 @@
 # FastAPI + Python — Build Templates
 
+> **Response contract:** All endpoints MUST conform to the envelope defined in `references/response-contract.md`.
+
 Use these templates when the project detection (Step 0.1) identifies FastAPI. Adapt all placeholder tokens to the actual resource name. Use snake_case for Python conventions.
 
 Generate: Router, Pydantic models, Service, SQLAlchemy model (if detected). Generate only the operations the user requested.
@@ -46,6 +48,28 @@ class {Resource}QueryParams(BaseModel):
     status: Optional[{Resource}Status] = None
     sort_by: str = "created_at"
     sort_order: str = "desc"
+
+# --- Standard response envelopes (place in core/schemas.py or similar) ---
+
+from typing import TypeVar, Generic, List
+T = TypeVar("T")
+
+class ApiResponse(BaseModel, Generic[T]):
+    statusCode: int
+    message: str
+    data: T
+
+class PaginatedData(BaseModel, Generic[T]):
+    items: List[T]
+    total: int
+    page: int
+    limit: int
+    totalPages: int
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    statusCode: int = 200
+    message: str
+    data: PaginatedData[T]
 ```
 
 Pydantic v2 is the current standard. Use `model_config` instead of the old `class Config`. The `from_attributes=True` setting lets you pass ORM objects directly to response models — this avoids manual dict conversion.
@@ -81,7 +105,7 @@ async def create_{resource}(
 ):
     service = {Resource}Service(db)
     result = service.create(data, current_user)
-    return {"status": "success", "message": "{Resource} created", "data": result}
+    return {"statusCode": 201, "message": "{Resource} created", "data": result}
 
 @router.get(
     "/",
@@ -99,11 +123,15 @@ async def list_{resources}(
     service = {Resource}Service(db)
     items, total = service.find_all(page, limit, search, status_filter)
     return {
-        "items": items,
-        "total": total,
-        "page": page,
-        "limit": limit,
-        "totalPages": -(-total // limit),
+        "statusCode": 200,
+        "message": "{Resources} retrieved",
+        "data": {
+            "items": items,
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "totalPages": -(-total // limit),
+        },
     }
 
 @router.get("/{id}", response_model=ApiResponse[{Resource}Response])
@@ -112,13 +140,13 @@ async def get_{resource}(id: str, db: Session = Depends(get_db)):
     result = service.find_by_id(id)
     if not result:
         raise HTTPException(status_code=404, detail="{Resource} not found")
-    return {"status": "success", "data": result}
+    return {"statusCode": 200, "message": "{Resource} retrieved", "data": result}
 
 @router.put("/{id}", response_model=ApiResponse[{Resource}Response])
 async def update_{resource}(id: str, data: Update{Resource}, db: Session = Depends(get_db)):
     service = {Resource}Service(db)
     result = service.update(id, data)
-    return {"status": "success", "message": "{Resource} updated", "data": result}
+    return {"statusCode": 200, "message": "{Resource} updated", "data": result}
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_{resource}(id: str, db: Session = Depends(get_db)):
@@ -204,3 +232,51 @@ class {Resource}Model(Base):
 ```
 
 If the project uses Tortoise ORM or SQLModel instead of SQLAlchemy, adapt accordingly. The key principle is the same: keep models close to the DB, schemas close to the API boundary.
+
+---
+
+## Custom Exception Handler (project-level)
+
+Register this in `main.py` so that all errors conform to the standard error contract instead of FastAPI's default `{"detail": "..."}`:
+
+```python
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+import uuid
+
+app = FastAPI()
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "type": "about:blank",
+            "title": exc.detail if isinstance(exc.detail, str) else "Error",
+            "status": exc.status_code,
+            "detail": exc.detail if isinstance(exc.detail, str) else str(exc.detail),
+            "traceId": str(uuid.uuid4()),
+            "errors": [],
+        },
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = [
+        {"field": ".".join(str(loc) for loc in e["loc"]), "message": e["msg"]}
+        for e in exc.errors()
+    ]
+    return JSONResponse(
+        status_code=422,
+        content={
+            "type": "about:blank",
+            "title": "Validation Error",
+            "status": 422,
+            "detail": "One or more fields failed validation.",
+            "traceId": str(uuid.uuid4()),
+            "errors": errors,
+        },
+    )
+```

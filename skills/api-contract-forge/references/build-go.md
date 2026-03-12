@@ -1,3 +1,5 @@
+> **Response contract:** see [`references/response-contract.md`](response-contract.md) for the canonical envelope, pagination, and error shapes.
+
 # Go (Gin / Echo / Chi) — Build Templates
 
 Use these templates when the project detection (Step 0.1) identifies a Go framework. Adapt all placeholder tokens to the actual resource name. The examples below use Gin — adapt to Echo or Chi if detected.
@@ -58,9 +60,19 @@ type PaginatedResponse[T any] struct {
 
 // ApiResponse — standard envelope
 type ApiResponse[T any] struct {
-    Success bool   `json:"success"`
-    Message string `json:"message"`
-    Data    T      `json:"data"`
+    StatusCode int    `json:"statusCode"`
+    Message    string `json:"message"`
+    Data       T      `json:"data"`
+}
+
+// ErrorResponse — standard error envelope (RFC 7807-inspired)
+type ErrorResponse struct {
+    Type    string   `json:"type"`
+    Title   string   `json:"title"`
+    Status  int      `json:"status"`
+    Detail  string   `json:"detail"`
+    TraceID string   `json:"traceId,omitempty"`
+    Errors  []string `json:"errors,omitempty"`
 }
 ```
 
@@ -94,25 +106,35 @@ func New{Resource}Handler(service *services.{Resource}Service) *{Resource}Handle
 // @Produce json
 // @Param body body models.Create{Resource}Request true "Create {resource}"
 // @Success 201 {object} models.ApiResponse[models.{Resource}Response]
-// @Failure 400 {object} models.ErrorResponse
+// @Failure 400,500 {object} models.ErrorResponse
 // @Router /{resources} [post]
 func (h *{Resource}Handler) Create(c *gin.Context) {
     var req models.Create{Resource}Request
     if err := c.ShouldBindJSON(&req); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        c.JSON(http.StatusBadRequest, models.ErrorResponse{
+            Type:   "https://httpstatuses.com/400",
+            Title:  "Bad Request",
+            Status: http.StatusBadRequest,
+            Detail: err.Error(),
+        })
         return
     }
 
     result, err := h.service.Create(&req)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+            Type:   "https://httpstatuses.com/500",
+            Title:  "Internal Server Error",
+            Status: http.StatusInternalServerError,
+            Detail: err.Error(),
+        })
         return
     }
 
     c.JSON(http.StatusCreated, models.ApiResponse[models.{Resource}Response]{
-        Success: true,
-        Message: "{Resource} created",
-        Data:    *result,
+        StatusCode: http.StatusCreated,
+        Message:    "{Resource} created",
+        Data:       *result,
     })
 }
 
@@ -122,29 +144,46 @@ func (h *{Resource}Handler) Create(c *gin.Context) {
 // @Param page query int false "Page number" default(1)
 // @Param limit query int false "Items per page" default(10)
 // @Param search query string false "Search term"
-// @Success 200 {object} models.PaginatedResponse[models.{Resource}Response]
+// @Success 200 {object} models.ApiResponse[models.PaginatedResponse[models.{Resource}Response]]
 // @Router /{resources} [get]
 func (h *{Resource}Handler) List(c *gin.Context) {
     var params models.{Resource}QueryParams
     if err := c.ShouldBindQuery(&params); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        c.JSON(http.StatusBadRequest, models.ErrorResponse{
+            Type:   "https://httpstatuses.com/400",
+            Title:  "Bad Request",
+            Status: http.StatusBadRequest,
+            Detail: err.Error(),
+        })
         return
     }
 
     items, total, err := h.service.FindAll(&params)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+            Type:   "https://httpstatuses.com/500",
+            Title:  "Internal Server Error",
+            Status: http.StatusInternalServerError,
+            Detail: err.Error(),
+        })
         return
     }
 
     totalPages := (total + params.Limit - 1) / params.Limit
-    c.JSON(http.StatusOK, models.PaginatedResponse[models.{Resource}Response]{
-        Items: items, Total: total, Page: params.Page,
-        Limit: params.Limit, TotalPages: totalPages,
+    c.JSON(http.StatusOK, models.ApiResponse[models.PaginatedResponse[models.{Resource}Response]]{
+        StatusCode: http.StatusOK,
+        Message:    "Data retrieved",
+        Data: models.PaginatedResponse[models.{Resource}Response]{
+            Items: items, Total: total, Page: params.Page,
+            Limit: params.Limit, TotalPages: totalPages,
+        },
     })
 }
 
-// GetByID, Update, Delete — same pattern
+// GetByID — same pattern, wrap in ApiResponse with StatusCode: 200
+// Update  — same pattern, wrap in ApiResponse with StatusCode: 200
+// Delete  — returns 204 No Content with empty body:
+//   c.Status(http.StatusNoContent)
 ```
 
 ---

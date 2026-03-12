@@ -89,7 +89,9 @@ If the user specifies exact operations, generate only those — nothing more. If
 
 Generate files following the detected project conventions. The output should match the existing codebase patterns exactly — same file naming, same folder structure, same code style, same import patterns.
 
-**Read the appropriate framework reference before generating:**
+**IMPORTANT: Always read `references/response-contract.md` first.** This defines the standard response envelope that ALL frameworks must produce. Every generated controller/handler must wrap responses in the standard `{ statusCode, message, data }` shape. No framework-specific response formats are allowed — the JSON output must be identical regardless of backend language.
+
+**Then read the appropriate framework reference for code templates:**
 
 | Detected Framework | Reference File |
 |-------------------|----------------|
@@ -314,6 +316,7 @@ Always check for these common API anti-patterns:
 
 | File | When to Read |
 |------|-------------|
+| `references/response-contract.md` | **ALWAYS read first** in BUILD mode — defines the standard response envelope all frameworks must produce |
 | `references/build-express.md` | BUILD mode + Express detected |
 | `references/build-nestjs.md` | BUILD mode + NestJS detected |
 | `references/build-fastapi.md` | BUILD mode + FastAPI detected |
