@@ -67,7 +67,11 @@ Ask the user for:
    - Custom operations (e.g., "POST /:id/send")
 4. **Relations** (optional) — belongs to company, has many items, etc.
 5. **Permissions** (optional) — what permission pattern to use
-6. **Special requirements** (optional) — file upload, soft delete, search/filter, etc.
+6. **Special requirements** (optional) — these have full template support in `references/build-patterns.md`:
+   - **File upload** — multipart endpoints, file validation, storage service
+   - **Soft delete** — `deletedAt` field, auto-filtering, restore endpoint, trash listing
+   - **Relationship loading** — `?include=company,items` with ORM-specific eager loading
+   - **Advanced filtering** — date ranges, numeric ranges, multi-value enums, null checks
 
 **Handling partial generation:**
 
@@ -99,6 +103,8 @@ Generate files following the detected project conventions. The output should mat
 | Ruby on Rails | `references/build-rails.md` |
 
 Generate only the operations the user requested in Phase 0.2. If they asked for only Create, generate only the create schema, route, controller method, and service method.
+
+If the user requested any special requirements (file upload, soft delete, relationship loading, advanced filtering), also read `references/build-patterns.md` for cross-framework templates for those patterns.
 
 ### Phase 0.4: REGISTER — Wire Up the New Endpoint
 
@@ -344,5 +350,6 @@ Always check for these common API anti-patterns:
 | `references/build-spring-boot.md` | BUILD mode + Spring Boot detected |
 | `references/build-laravel.md` | BUILD mode + Laravel detected |
 | `references/build-rails.md` | BUILD mode + Rails detected |
+| `references/build-patterns.md` | BUILD mode + special requirements (file upload, soft delete, relationship loading, advanced filtering) |
 | `references/analyze-generators.md` | ANALYZE mode Phase 4 (generating contract artifacts) |
 | `references/industry-standards.md` | BUILD mode Phase 0.6 (compliance checklist) or ANALYZE mode (flagging issues) |
