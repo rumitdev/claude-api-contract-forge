@@ -7,14 +7,13 @@ A Claude skill for API contracting. Build new APIs with best practices or analyz
 ### BUILD Mode
 - Auto-detects your project's tech stack (Express, NestJS, FastAPI, Go, Django, Laravel, Spring Boot, Rails, and more)
 - Scaffolds production-ready CRUD endpoints with validation, typed responses, Swagger docs, and RBAC permissions
-- Generates matching frontend types (TypeScript, Dart, Kotlin, Swift)
 - Runs a contract compliance checklist (OWASP, RFC 9457, pagination, i18n)
 
 ### ANALYZE Mode
 - Paste a raw JSON API response and get typed contracts in any language
 - Detects inconsistencies, nullable vs optional fields, and anti-patterns
 - Compares two response versions to detect breaking changes
-- Generates artifacts: TypeScript interfaces, Zod schemas, Pydantic models, Dart classes, Kotlin data classes, Swift structs, OpenAPI 3.1, JSON Schema
+- Generates artifacts: TypeScript interfaces, Zod schemas, Pydantic models, OpenAPI 3.1, JSON Schema
 
 ## Supported Tech Stacks
 
@@ -43,7 +42,7 @@ api-contract-forge/
 │   ├── build-spring-boot.md              # Spring Boot Kotlin/Java templates
 │   ├── build-laravel.md                  # Laravel PHP templates
 │   ├── build-rails.md                    # Rails Ruby templates
-│   ├── analyze-generators.md             # All 8 language generators
+│   ├── analyze-generators.md             # Backend language generators
 │   └── industry-standards.md             # Standards 1-10 (OWASP, RFC 9457, etc.)
 └── evals/
     └── evals.json                        # Test cases
@@ -64,7 +63,7 @@ Just tell Claude what you need:
 "Here's my API response: { ... }"
 "Generate TypeScript types from this JSON"
 "Compare these two API responses for breaking changes"
-"Check my frontend types against this API response"
+"Check my types against this API response"
 ```
 
 ## Trigger Keywords
