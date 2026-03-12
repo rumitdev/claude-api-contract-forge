@@ -6,13 +6,37 @@ Read this file before generating any controller/handler/router code.
 
 ---
 
+## Unified Envelope
+
+Every response (except 204 DELETE) uses the same top-level structure:
+
+```json
+{
+  "status": true,
+  "message": "Human-readable message",
+  "data": { ... },
+  "error": null
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `status` | `boolean` | Yes | `true` for success, `false` for error |
+| `message` | `string` | Yes | Human-readable message (use i18n key if detected) |
+| `data` | `object \| null` | Yes | The resource/payload on success, `null` on error |
+| `error` | `object \| null` | Yes | Error details on failure, `null` on success |
+
+This unified shape means **one response model** on the client side — no separate success/error parsers needed.
+
+---
+
 ## 1. Success — Single Resource
 
 Used by: GET /:id, POST, PUT/PATCH
 
 ```json
 {
-  "statusCode": 200,
+  "status": true,
   "message": "Resource retrieved",
   "data": {
     "id": "uuid-here",
@@ -21,17 +45,12 @@ Used by: GET /:id, POST, PUT/PATCH
     "status": "draft",
     "createdAt": "2025-01-15T10:30:00Z",
     "updatedAt": "2025-01-15T10:30:00Z"
-  }
+  },
+  "error": null
 }
 ```
 
-| Field | Type | Required | Notes |
-|-------|------|----------|-------|
-| `statusCode` | `number` | Yes | HTTP status code (200, 201) |
-| `message` | `string` | Yes | Human-readable message (use i18n key if detected) |
-| `data` | `object` | Yes | The resource object |
-
-**Status codes:**
+**HTTP status codes:**
 - `200` — GET /:id, PUT/PATCH (existing resource returned)
 - `201` — POST (new resource created)
 
@@ -43,7 +62,7 @@ Used by: GET / (list endpoints)
 
 ```json
 {
-  "statusCode": 200,
+  "status": true,
   "message": "Data retrieved",
   "data": {
     "items": [
@@ -54,14 +73,13 @@ Used by: GET / (list endpoints)
     "page": 1,
     "limit": 10,
     "totalPages": 5
-  }
+  },
+  "error": null
 }
 ```
 
 | Field | Type | Required | Notes |
 |-------|------|----------|-------|
-| `statusCode` | `number` | Yes | Always `200` |
-| `message` | `string` | Yes | Human-readable message |
 | `data.items` | `array` | Yes | Array of resources. Empty array `[]` if no results — never `null` |
 | `data.total` | `number` | Yes | Total count of all matching records (not just this page) |
 | `data.page` | `number` | Yes | Current page number (1-based) |
@@ -95,29 +113,30 @@ Used by: POST, PUT/PATCH when input fails validation
 
 ```json
 {
-  "type": "validation-error",
-  "title": "Validation Error",
-  "status": 400,
-  "detail": "One or more fields failed validation",
-  "traceId": "req-abc-123",
-  "errors": [
-    { "field": "email", "message": "Must be a valid email address", "code": "INVALID_FORMAT" },
-    { "field": "amount", "message": "Must be greater than 0", "code": "MIN_VALUE" }
-  ]
+  "status": false,
+  "message": "Validation Error",
+  "data": null,
+  "error": {
+    "type": "validation-error",
+    "detail": "One or more fields failed validation",
+    "traceId": "req-abc-123",
+    "errors": [
+      { "field": "email", "message": "Must be a valid email address", "code": "INVALID_FORMAT" },
+      { "field": "amount", "message": "Must be greater than 0", "code": "MIN_VALUE" }
+    ]
+  }
 }
 ```
 
 | Field | Type | Required | Notes |
 |-------|------|----------|-------|
-| `type` | `string` | Yes | Error category identifier |
-| `title` | `string` | Yes | Human-readable error title |
-| `status` | `number` | Yes | HTTP status code |
-| `detail` | `string` | Recommended | Specific error description |
-| `traceId` | `string` | Recommended | Request correlation ID for debugging |
-| `errors` | `array` | For validation | Field-level error details |
-| `errors[].field` | `string` | Yes | Field name that failed |
-| `errors[].message` | `string` | Yes | Human-readable error message |
-| `errors[].code` | `string` | Yes | Machine-readable error code |
+| `error.type` | `string` | Yes | Error category identifier |
+| `error.detail` | `string` | Recommended | Specific error description |
+| `error.traceId` | `string` | Recommended | Request correlation ID for debugging |
+| `error.errors` | `array` | For validation | Field-level error details |
+| `error.errors[].field` | `string` | Yes | Field name that failed |
+| `error.errors[].message` | `string` | Yes | Human-readable error message |
+| `error.errors[].code` | `string` | Yes | Machine-readable error code |
 
 ---
 
@@ -125,11 +144,14 @@ Used by: POST, PUT/PATCH when input fails validation
 
 ```json
 {
-  "type": "not-found",
-  "title": "Resource Not Found",
-  "status": 404,
-  "detail": "Invoice with id 'abc-123' was not found",
-  "traceId": "req-abc-123"
+  "status": false,
+  "message": "Resource Not Found",
+  "data": null,
+  "error": {
+    "type": "not-found",
+    "detail": "Invoice with id 'abc-123' was not found",
+    "traceId": "req-abc-123"
+  }
 }
 ```
 
@@ -139,21 +161,27 @@ Used by: POST, PUT/PATCH when input fails validation
 
 ```json
 {
-  "type": "unauthorized",
-  "title": "Unauthorized",
-  "status": 401,
-  "detail": "Invalid or expired authentication token",
-  "traceId": "req-abc-123"
+  "status": false,
+  "message": "Unauthorized",
+  "data": null,
+  "error": {
+    "type": "unauthorized",
+    "detail": "Invalid or expired authentication token",
+    "traceId": "req-abc-123"
+  }
 }
 ```
 
 ```json
 {
-  "type": "forbidden",
-  "title": "Forbidden",
-  "status": 403,
-  "detail": "You do not have permission to perform this action",
-  "traceId": "req-abc-123"
+  "status": false,
+  "message": "Forbidden",
+  "data": null,
+  "error": {
+    "type": "forbidden",
+    "detail": "You do not have permission to perform this action",
+    "traceId": "req-abc-123"
+  }
 }
 ```
 
@@ -163,11 +191,14 @@ Used by: POST, PUT/PATCH when input fails validation
 
 ```json
 {
-  "type": "internal-error",
-  "title": "Internal Server Error",
-  "status": 500,
-  "detail": "An unexpected error occurred",
-  "traceId": "req-abc-123"
+  "status": false,
+  "message": "Internal Server Error",
+  "data": null,
+  "error": {
+    "type": "internal-error",
+    "detail": "An unexpected error occurred",
+    "traceId": "req-abc-123"
+  }
 }
 ```
 
@@ -185,7 +216,7 @@ GET /api/v1/users/user-001?include=profile
 
 ```json
 {
-  "statusCode": 200,
+  "status": true,
   "message": "User retrieved",
   "data": {
     "id": "user-001",
@@ -198,14 +229,15 @@ GET /api/v1/users/user-001?include=profile
       "experience": 5
     },
     "createdAt": "2025-01-15T10:30:00Z"
-  }
+  },
+  "error": null
 }
 ```
 
 Without `?include`:
 ```json
 {
-  "statusCode": 200,
+  "status": true,
   "message": "User retrieved",
   "data": {
     "id": "user-001",
@@ -213,7 +245,8 @@ Without `?include`:
     "email": "rumit@example.com",
     "profileId": "prof-001",
     "createdAt": "2025-01-15T10:30:00Z"
-  }
+  },
+  "error": null
 }
 ```
 
@@ -227,7 +260,7 @@ GET /api/v1/users/user-001?include=profile.skills
 
 ```json
 {
-  "statusCode": 200,
+  "status": true,
   "message": "User retrieved",
   "data": {
     "id": "user-001",
@@ -244,7 +277,8 @@ GET /api/v1/users/user-001?include=profile.skills
       ]
     },
     "createdAt": "2025-01-15T10:30:00Z"
-  }
+  },
+  "error": null
 }
 ```
 
@@ -260,7 +294,7 @@ GET /api/v1/users/user-001?include=profile.skills,company
 
 ```json
 {
-  "statusCode": 200,
+  "status": true,
   "message": "User retrieved",
   "data": {
     "id": "user-001",
@@ -279,7 +313,8 @@ GET /api/v1/users/user-001?include=profile.skills,company
       "name": "Acme Corp"
     },
     "createdAt": "2025-01-15T10:30:00Z"
-  }
+  },
+  "error": null
 }
 ```
 
@@ -300,7 +335,7 @@ GET /api/v1/users/user-002?include=profile.skills
 ```
 ```json
 {
-  "statusCode": 200,
+  "status": true,
   "message": "User retrieved",
   "data": {
     "id": "user-002",
@@ -308,7 +343,8 @@ GET /api/v1/users/user-002?include=profile.skills
     "profileId": null,
     "profile": null,
     "createdAt": "2025-03-01T08:00:00Z"
-  }
+  },
+  "error": null
 }
 ```
 Profile is `null`, so skills are not loaded — the response stops at the null parent. No error.
@@ -363,11 +399,11 @@ The key principle: the framework's internal conventions don't matter — the JSO
 
 Before marking any generated endpoint as complete, verify:
 
-- [ ] Single item response has `statusCode`, `message`, `data` wrapper
-- [ ] List response has `statusCode`, `message`, `data.items`, `data.total`, `data.page`, `data.limit`, `data.totalPages`
+- [ ] Single item response has `status`, `message`, `data`, `error` wrapper
+- [ ] List response has `status`, `message`, `data.items`, `data.total`, `data.page`, `data.limit`, `data.totalPages`, `error`
 - [ ] Delete returns `204 No Content` with empty body
-- [ ] Validation errors return `type`, `title`, `status`, `errors[]` with `field`, `message`, `code`
-- [ ] Not Found errors return `type`, `title`, `status`, `detail`
+- [ ] Error responses have `status: false`, `message`, `data: null`, `error` object with `type`, `detail`
+- [ ] Validation errors include `error.errors[]` with `field`, `message`, `code`
 - [ ] All JSON fields use camelCase
 - [ ] Dates are ISO 8601
 - [ ] Null relations are `null`, not missing
