@@ -12,10 +12,7 @@ Ask which targets the user wants if not specified.
 2. [Zod Schemas](#zod)
 3. [OpenAPI 3.1](#openapi)
 4. [Python Pydantic](#pydantic)
-5. [Dart Model Classes](#dart)
-6. [Kotlin Data Classes](#kotlin)
-7. [Swift Codable Structs](#swift)
-8. [JSON Schema](#json-schema)
+5. [JSON Schema](#json-schema)
 
 ---
 
@@ -154,93 +151,6 @@ class MealSlot(BaseModel):
 
 ---
 
-## Dart Model Classes (Flutter) {#dart}
-
-```dart
-class MealSlot {
-  final String? recipe;
-  final bool isLeftOver;
-  final bool? hasLeftOver;
-  final String serving;
-
-  MealSlot({
-    required this.recipe,
-    required this.isLeftOver,
-    this.hasLeftOver,
-    required this.serving,
-  });
-
-  factory MealSlot.fromJson(Map<String, dynamic> json) => MealSlot(
-    recipe: json['recipe'] as String?,
-    isLeftOver: json['isLeftOver'] as bool,
-    hasLeftOver: json['hasLeftOver'] as bool?,
-    serving: json['serving'] as String,
-  );
-
-  Map<String, dynamic> toJson() => {
-    'recipe': recipe,
-    'isLeftOver': isLeftOver,
-    if (hasLeftOver != null) 'hasLeftOver': hasLeftOver,
-    'serving': serving,
-  };
-}
-```
-
-### Rules
-
-- Use `final` fields with named constructor parameters
-- `required` for non-optional fields, no keyword for optional
-- Use `?` suffix for nullable types
-- Always generate `fromJson` factory and `toJson` method — Flutter apps need both for API communication
-- Handle null checks in fromJson with `as Type?`
-- Omit null optional fields in toJson
-
----
-
-## Kotlin Data Classes (Android) {#kotlin}
-
-```kotlin
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.SerialName
-
-@Serializable
-data class MealSlot(
-    val recipe: String?,
-    @SerialName("isLeftOver") val isLeftOver: Boolean,
-    @SerialName("hasLeftOver") val hasLeftOver: Boolean? = null,
-    val serving: String
-)
-```
-
-### Rules
-
-- Use `@Serializable` from kotlinx.serialization
-- Use `@SerialName` for JSON field mapping
-- Use `?` for nullable, `= null` default for optional
-- Use `data class` for all models
-
----
-
-## Swift Codable Structs (iOS) {#swift}
-
-```swift
-struct MealSlot: Codable {
-    let recipe: String?
-    let isLeftOver: Bool
-    let hasLeftOver: Bool?
-    let serving: String
-}
-```
-
-### Rules
-
-- Use `struct` conforming to `Codable`
-- Use `?` for both nullable and optional
-- Add `CodingKeys` enum only if JSON keys differ from Swift naming conventions
-- Use `let` for immutable properties
-
----
-
 ## JSON Schema (Universal) {#json-schema}
 
 ```json
@@ -267,6 +177,6 @@ Use draft 2020-12. Mark `required` arrays accurately. Use `["string", "null"]` f
 2. Always extract nested types — never inline objects deeper than 2 levels
 3. Always separate envelope/pagination from payload types
 4. Add comments on fields where an inconsistency was resolved
-5. Generate one file per language — don't mix TypeScript and Dart in one output
-6. Use the language's conventions — snake_case for Python, camelCase for TypeScript/Dart/Kotlin, etc.
+5. Generate one file per language — don't mix TypeScript and Python in one output
+6. Use the language's conventions — snake_case for Python, camelCase for TypeScript, etc.
 7. Include example values as comments where helpful

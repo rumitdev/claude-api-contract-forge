@@ -1,6 +1,6 @@
 ---
 name: api-contract-forge
-description: "Universal API contract skill. Build new APIs with best contracting standards for any tech stack, infer types from JSON responses, detect inconsistencies, and generate contract artifacts (TypeScript, Zod, Pydantic, Dart, Kotlin, Swift, OpenAPI, JSON Schema). Triggers on: build api, new endpoint, api contract, generate types, infer schema, normalize API, scaffold api, create api for [resource]. Also trigger when a user pastes a raw JSON object and asks about its types or schema, when they mention REST API design, endpoint scaffolding, contract-first development, type safety for APIs, API response validation, or breaking change detection — even if they don't explicitly say 'contract'."
+description: "Backend API contract skill. Build new APIs with best contracting standards for any tech stack, infer types from JSON responses, detect inconsistencies, and generate contract artifacts (TypeScript, Zod, Pydantic, OpenAPI, JSON Schema). Triggers on: build api, new endpoint, api contract, generate types, infer schema, normalize API, scaffold api, create api for [resource]. Also trigger when a user pastes a raw JSON object and asks about its types or schema, when they mention REST API design, endpoint scaffolding, contract-first development, type safety for APIs, API response validation, or breaking change detection — even if they don't explicitly say 'contract'."
 ---
 
 # API Contract Forge
@@ -8,7 +8,7 @@ description: "Universal API contract skill. Build new APIs with best contracting
 A universal skill for API contracting with two modes:
 
 1. **BUILD** — Scaffold new API endpoints with proper contracting (validation, typed responses, documentation) for any tech stack
-2. **ANALYZE** — Take raw JSON API responses, infer types, detect inconsistencies, and generate contract artifacts for any language
+2. **ANALYZE** — Take raw JSON API responses, infer types, detect inconsistencies, and generate backend contract artifacts
 
 ## Core Workflow
 
@@ -32,7 +32,7 @@ Scan the project to determine the framework, language, and existing patterns. Ch
 | `build.gradle` / `pom.xml` | Java/Kotlin framework (Spring Boot, Ktor) |
 | `go.mod` | Go framework (Gin, Echo, Fiber, Chi) |
 | `Gemfile` | Ruby framework (Rails, Sinatra) |
-| `pubspec.yaml` | Dart/Flutter (shelf, dart_frog) |
+| `pubspec.yaml` | Dart backend (shelf, dart_frog) |
 | `Cargo.toml` | Rust framework (Actix, Axum, Rocket) |
 | `composer.json` | PHP framework (Laravel, Symfony) |
 
@@ -117,34 +117,7 @@ After generating files, show the user what needs to be wired:
 
 Provide the exact code snippets to paste, with file paths.
 
-### Phase 0.5: FRONTEND TYPES — Generate Client-Side Contract
-
-After backend is generated, also generate frontend types that match:
-
-1. **TypeScript interfaces** for the new resource (for React/Vue/Angular/Svelte)
-2. **Dart models** with fromJson/toJson (for Flutter)
-3. **API hook/function** for calling the new endpoint (matching detected frontend pattern)
-
-```typescript
-// Frontend: types/{resource}.interface.ts
-export interface {Resource}Type {
-  id: string;
-  title: string;
-  amount: number;
-  status: "draft" | "sent" | "paid";
-  createdAt: string;
-}
-
-export interface {Resource}sAPIResponse {
-  items: {Resource}Type[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
-```
-
-### Phase 0.6: CHECKLIST — Contract Compliance Verification
+### Phase 0.5: CHECKLIST — Contract Compliance Verification
 
 After generation, run through this checklist and report pass/fail. Read `references/industry-standards.md` for the detailed standards behind each check.
 
@@ -156,7 +129,6 @@ VALIDATION & TYPES:
   [PASS/FAIL] Validation schema exists for every POST/PUT endpoint
   [PASS/FAIL] Validation middleware applied on every route
   [PASS/FAIL] All types derived from validation schemas (no duplicate definitions)
-  [PASS/FAIL] Frontend types match backend response shape
 
 RESPONSE FORMAT:
   [PASS/FAIL] Response uses standard envelope (ApiResponse / sendSuccess)
@@ -272,7 +244,7 @@ WARNINGS (N):
 
 ### Phase 4: GENERATE — Multi-Language Contract Artifacts
 
-Read `references/analyze-generators.md` for language-specific generation rules and templates. Supports: TypeScript interfaces, Zod schemas, OpenAPI 3.1, Pydantic models, Dart classes, Kotlin data classes, Swift structs, JSON Schema.
+Read `references/analyze-generators.md` for language-specific generation rules and templates. Supports: TypeScript interfaces, Zod schemas, OpenAPI 3.1, Pydantic models, JSON Schema.
 
 Ask which targets the user wants if not specified. Generate one file per language.
 
@@ -288,7 +260,7 @@ Present a clear report separating breaking vs non-breaking, with impact and reco
 
 ### Phase 6: VALIDATE — Check Existing Code Against Contract (Optional)
 
-If the user has an existing codebase, scan it to find TypeScript interfaces / Pydantic models / Dart classes and compare against the inferred contract. Report: type mismatches, missing fields, extra fields, nullable/optional discrepancies.
+If the user has an existing codebase, scan it to find TypeScript interfaces / Pydantic models / validation schemas and compare against the inferred contract. Report: type mismatches, missing fields, extra fields, nullable/optional discrepancies.
 
 ---
 
@@ -320,17 +292,17 @@ Always check for these common API anti-patterns:
 5. Confirm target languages with user before generating
 6. Never guess on ambiguous types — ask the user to decide
 7. Generate one file per language
-8. Use the language's conventions — snake_case for Python, camelCase for TypeScript/Dart/Kotlin, etc.
+8. Use the language's conventions — snake_case for Python, camelCase for TypeScript, etc.
 9. Include example values as comments where helpful
 
 ## Quick Reference
 
 | User Says | Mode | Phases |
 |---|---|---|
-| "Build a new invoice API" | BUILD | 0.1 → 0.2 → 0.3 → 0.4 → 0.5 → 0.6 |
-| "Create CRUD for meal-plans" | BUILD | 0.1 → 0.2 → 0.3 → 0.4 → 0.5 → 0.6 |
-| "Add a new endpoint for appointments" | BUILD | 0.1 → 0.2 → 0.3 → 0.4 → 0.5 → 0.6 |
-| "Scaffold a users API with Express + Zod" | BUILD | 0.1 → 0.2 → 0.3 → 0.4 → 0.5 → 0.6 |
+| "Build a new invoice API" | BUILD | 0.1 → 0.2 → 0.3 → 0.4 → 0.5 |
+| "Create CRUD for meal-plans" | BUILD | 0.1 → 0.2 → 0.3 → 0.4 → 0.5 |
+| "Add a new endpoint for appointments" | BUILD | 0.1 → 0.2 → 0.3 → 0.4 → 0.5 |
+| "Scaffold a users API with Express + Zod" | BUILD | 0.1 → 0.2 → 0.3 → 0.4 → 0.5 |
 | "Here's my API response" + JSON | ANALYZE | 1 → 2 → 3 → 4 |
 | "Compare these two responses" | ANALYZE | 1 → 2 → 3 → 5 |
 | "Check my types against this response" | ANALYZE | 1 → 2 → 6 |
@@ -352,4 +324,4 @@ Always check for these common API anti-patterns:
 | `references/build-rails.md` | BUILD mode + Rails detected |
 | `references/build-patterns.md` | BUILD mode + special requirements (file upload, soft delete, relationship loading, advanced filtering) |
 | `references/analyze-generators.md` | ANALYZE mode Phase 4 (generating contract artifacts) |
-| `references/industry-standards.md` | BUILD mode Phase 0.6 (compliance checklist) or ANALYZE mode (flagging issues) |
+| `references/industry-standards.md` | BUILD mode Phase 0.5 (compliance checklist) or ANALYZE mode (flagging issues) |

@@ -841,29 +841,6 @@ Document every filter parameter with type, format, and example:
  */
 ```
 
-### Frontend Type for Query Params
-
-Generate a matching frontend type so the client can build queries safely:
-
-```typescript
-// Frontend: types/{resource}.query.ts
-export interface {Resource}QueryParams {
-  page?: number;
-  limit?: number;
-  sortBy?: string;
-  sortOrder?: "asc" | "desc";
-  search?: string;
-  status?: string;           // Comma-separated: "draft,sent"
-  createdAfter?: string;     // ISO date string
-  createdBefore?: string;    // ISO date string
-  amountMin?: number;
-  amountMax?: number;
-  isActive?: boolean;
-  assigneeIsNull?: boolean;
-  include?: string;          // Comma-separated: "company,items"
-}
-```
-
 ### Performance consideration
 
 For advanced filtering, consider adding database indexes on commonly filtered columns (status, createdAt, amount). Without indexes, date range and numeric range queries degrade quickly on large tables. Mention this in the wiring step (Phase 0.4) when generating the migration.
