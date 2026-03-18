@@ -58,18 +58,17 @@ type PaginatedResponse[T any] struct {
     TotalPages int `json:"totalPages"`
 }
 
-// ApiResponse — standard envelope
+// ApiResponse — unified envelope
 type ApiResponse[T any] struct {
-    StatusCode int    `json:"statusCode"`
-    Message    string `json:"message"`
-    Data       T      `json:"data"`
+    Status  bool        `json:"status"`
+    Message string      `json:"message"`
+    Data    T           `json:"data"`
+    Error   interface{} `json:"error"`
 }
 
-// ErrorResponse — standard error envelope (RFC 7807-inspired)
-type ErrorResponse struct {
+// ErrorDetail — nested inside ApiResponse.Error on failure
+type ErrorDetail struct {
     Type    string   `json:"type"`
-    Title   string   `json:"title"`
-    Status  int      `json:"status"`
     Detail  string   `json:"detail"`
     TraceID string   `json:"traceId,omitempty"`
     Errors  []string `json:"errors,omitempty"`
@@ -111,30 +110,37 @@ func New{Resource}Handler(service *services.{Resource}Service) *{Resource}Handle
 func (h *{Resource}Handler) Create(c *gin.Context) {
     var req models.Create{Resource}Request
     if err := c.ShouldBindJSON(&req); err != nil {
-        c.JSON(http.StatusBadRequest, models.ErrorResponse{
-            Type:   "https://httpstatuses.com/400",
-            Title:  "Bad Request",
-            Status: http.StatusBadRequest,
-            Detail: err.Error(),
+        c.JSON(http.StatusBadRequest, models.ApiResponse[interface{}]{
+            Status:  false,
+            Message: "Bad Request",
+            Data:    nil,
+            Error: models.ErrorDetail{
+                Type:   "https://httpstatuses.com/400",
+                Detail: err.Error(),
+            },
         })
         return
     }
 
     result, err := h.service.Create(&req)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, models.ErrorResponse{
-            Type:   "https://httpstatuses.com/500",
-            Title:  "Internal Server Error",
-            Status: http.StatusInternalServerError,
-            Detail: err.Error(),
+        c.JSON(http.StatusInternalServerError, models.ApiResponse[interface{}]{
+            Status:  false,
+            Message: "Internal Server Error",
+            Data:    nil,
+            Error: models.ErrorDetail{
+                Type:   "https://httpstatuses.com/500",
+                Detail: err.Error(),
+            },
         })
         return
     }
 
     c.JSON(http.StatusCreated, models.ApiResponse[models.{Resource}Response]{
-        StatusCode: http.StatusCreated,
-        Message:    "{Resource} created",
-        Data:       *result,
+        Status:  true,
+        Message: "{Resource} created",
+        Data:    *result,
+        Error:   nil,
     })
 }
 
@@ -149,39 +155,46 @@ func (h *{Resource}Handler) Create(c *gin.Context) {
 func (h *{Resource}Handler) List(c *gin.Context) {
     var params models.{Resource}QueryParams
     if err := c.ShouldBindQuery(&params); err != nil {
-        c.JSON(http.StatusBadRequest, models.ErrorResponse{
-            Type:   "https://httpstatuses.com/400",
-            Title:  "Bad Request",
-            Status: http.StatusBadRequest,
-            Detail: err.Error(),
+        c.JSON(http.StatusBadRequest, models.ApiResponse[interface{}]{
+            Status:  false,
+            Message: "Bad Request",
+            Data:    nil,
+            Error: models.ErrorDetail{
+                Type:   "https://httpstatuses.com/400",
+                Detail: err.Error(),
+            },
         })
         return
     }
 
     items, total, err := h.service.FindAll(&params)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, models.ErrorResponse{
-            Type:   "https://httpstatuses.com/500",
-            Title:  "Internal Server Error",
-            Status: http.StatusInternalServerError,
-            Detail: err.Error(),
+        c.JSON(http.StatusInternalServerError, models.ApiResponse[interface{}]{
+            Status:  false,
+            Message: "Internal Server Error",
+            Data:    nil,
+            Error: models.ErrorDetail{
+                Type:   "https://httpstatuses.com/500",
+                Detail: err.Error(),
+            },
         })
         return
     }
 
     totalPages := (total + params.Limit - 1) / params.Limit
     c.JSON(http.StatusOK, models.ApiResponse[models.PaginatedResponse[models.{Resource}Response]]{
-        StatusCode: http.StatusOK,
-        Message:    "Data retrieved",
+        Status:  true,
+        Message: "Data retrieved",
         Data: models.PaginatedResponse[models.{Resource}Response]{
             Items: items, Total: total, Page: params.Page,
             Limit: params.Limit, TotalPages: totalPages,
         },
+        Error: nil,
     })
 }
 
-// GetByID — same pattern, wrap in ApiResponse with StatusCode: 200
-// Update  — same pattern, wrap in ApiResponse with StatusCode: 200
+// GetByID — same pattern, wrap in ApiResponse with Status: true, Error: nil
+// Update  — same pattern, wrap in ApiResponse with Status: true, Error: nil
 // Delete  — returns 204 No Content with empty body:
 //   c.Status(http.StatusNoContent)
 ```

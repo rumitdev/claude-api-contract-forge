@@ -94,7 +94,7 @@ class {Resource}ViewSet(EnvelopeResponseMixin, viewsets.ModelViewSet):
         serializer.save(created_by=self.request.user)
 ```
 
-The `EnvelopeResponseMixin` (defined below in File 6) automatically wraps every response in the standard `{statusCode, message, data}` envelope. Paginated list responses are handled by the custom pagination class (File 7).
+The `EnvelopeResponseMixin` (defined below in File 6) automatically wraps every response in the unified `{status, message, data, error}` envelope. Paginated list responses are handled by the custom pagination class (File 7).
 
 ---
 
@@ -142,8 +142,8 @@ from rest_framework.response import Response
 
 class EnvelopeResponseMixin:
     """
-    Wraps all ViewSet responses in the standard API envelope:
-      { "statusCode": N, "message": "...", "data": { ... } }
+    Wraps all ViewSet responses in the unified API envelope:
+      { "status": true, "message": "...", "data": { ... }, "error": null }
 
     Paginated responses are handled by StandardPagination (File 7) instead.
     Delete (204) is left as-is (empty body).
@@ -161,7 +161,7 @@ class EnvelopeResponseMixin:
             return response
 
         # Avoid double-wrapping if data already has the envelope
-        if isinstance(response.data, dict) and "statusCode" in response.data:
+        if isinstance(response.data, dict) and "status" in response.data:
             return response
 
         action = getattr(self, "action", None)
@@ -175,9 +175,10 @@ class EnvelopeResponseMixin:
         message = message_map.get(action, "Success")
 
         response.data = {
-            "statusCode": response.status_code,
+            "status": True,
             "message": message,
             "data": response.data,
+            "error": None,
         }
         return response
 ```
@@ -207,7 +208,7 @@ class StandardPagination(PageNumberPagination):
         total_pages = math.ceil(total / limit) if limit else 0
 
         response = Response({
-            "statusCode": 200,
+            "status": True,
             "message": "Items retrieved",
             "data": {
                 "items": data,
@@ -216,6 +217,7 @@ class StandardPagination(PageNumberPagination):
                 "limit": limit,
                 "totalPages": total_pages,
             },
+            "error": None,
         })
         response.is_paginated = True  # tells EnvelopeResponseMixin to skip wrapping
         return response
@@ -248,19 +250,22 @@ def standard_exception_handler(exc, context):
             else:
                 errors.append({"field": field, "message": str(messages)})
         detail = "One or more fields failed validation."
-        title = "Validation Error"
+        message = "Validation Error"
     else:
         detail = str(response.data.get("detail", "An error occurred"))
-        title = detail
+        message = detail
         errors = []
 
     response.data = {
-        "type": "about:blank",
-        "title": title,
-        "status": response.status_code,
-        "detail": detail,
-        "traceId": str(uuid.uuid4()),
-        "errors": errors,
+        "status": False,
+        "message": message,
+        "data": None,
+        "error": {
+            "type": "about:blank",
+            "detail": detail,
+            "traceId": str(uuid.uuid4()),
+            "errors": errors,
+        },
     }
     return response
 ```

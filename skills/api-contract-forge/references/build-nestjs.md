@@ -1,6 +1,6 @@
 # NestJS — Build Templates
 
-> **Response contract:** All responses MUST conform to the standard envelope defined in [`references/response-contract.md`](./response-contract.md). Controller methods must wrap return values in the standard `{ statusCode, message, data }` envelope — never return raw entities. See that file for the canonical single-item, list, delete, and error shapes.
+> **Response contract:** All responses MUST conform to the unified envelope defined in [`references/response-contract.md`](./response-contract.md). Controller methods must wrap return values in the `{ status, message, data, error }` envelope — never return raw entities. See that file for the canonical single-item, list, delete, and error shapes.
 
 Use these templates when the project detection (Step 0.1) identifies NestJS. Adapt all placeholder tokens to the actual resource name.
 
@@ -78,7 +78,7 @@ export class {Resource}QueryDto {
 
 ## File 2: Controller — `src/{resource}/{resource}.controller.ts`
 
-> **Important:** Every controller method wraps its return value in the standard response envelope (`{ statusCode, message, data }`). Never return raw entities — this breaks the API contract.
+> **Important:** Every controller method wraps its return value in the unified response envelope (`{ status, message, data, error }`). Never return raw entities — this breaks the API contract.
 
 ```typescript
 import { Controller, Get, Post, Put, Delete, Param, Body, Query, UseGuards, HttpStatus, HttpCode } from '@nestjs/common';
@@ -102,8 +102,8 @@ export class {Resource}Controller {
   @ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'Validation error' })
   async create(@Body() dto: Create{Resource}Dto) {
     const result = await this.{resource}Service.create(dto);
-    // Envelope: { statusCode: 201, message: "...", data: { ...entity } }
-    return { statusCode: 201, message: '{Resource} created', data: result };
+    // Envelope: { status: true, message: "...", data: { ...entity }, error: null }
+    return { status: true, message: '{Resource} created', data: result, error: null };
   }
 
   @Get()
@@ -111,8 +111,8 @@ export class {Resource}Controller {
   @ApiResponse({ status: HttpStatus.OK, description: '{Resources} retrieved' })
   async findAll(@Query() query: {Resource}QueryDto) {
     const result = await this.{resource}Service.findAll(query);
-    // Envelope: { statusCode: 200, message: "...", data: { items, total, page, limit, totalPages } }
-    return { statusCode: 200, message: '{Resources} retrieved', data: result };
+    // Envelope: { status: true, message: "...", data: { items, total, page, limit, totalPages }, error: null }
+    return { status: true, message: '{Resources} retrieved', data: result, error: null };
   }
 
   @Get(':id')
@@ -121,14 +121,14 @@ export class {Resource}Controller {
   @ApiResponse({ status: HttpStatus.NOT_FOUND, description: '{Resource} not found' })
   async findOne(@Param('id') id: string) {
     const result = await this.{resource}Service.findOne(id);
-    return { statusCode: 200, message: '{Resource} retrieved', data: result };
+    return { status: true, message: '{Resource} retrieved', data: result, error: null };
   }
 
   @Put(':id')
   @ApiOperation({ summary: 'Update a {resource}' })
   async update(@Param('id') id: string, @Body() dto: Update{Resource}Dto) {
     const result = await this.{resource}Service.update(id, dto);
-    return { statusCode: 200, message: '{Resource} updated', data: result };
+    return { status: true, message: '{Resource} updated', data: result, error: null };
   }
 
   @Delete(':id')
@@ -144,7 +144,7 @@ export class {Resource}Controller {
 
 ### Error handling — Exception Filter
 
-To produce the standard error envelope (`{ type, title, status, detail, traceId, errors }`), register a global exception filter. This ensures all errors — including validation failures, 404s, and unhandled exceptions — conform to the response contract.
+To produce the unified error envelope (`{ status: false, message, data: null, error: { type, detail, traceId, errors } }`), register a global exception filter. This ensures all errors — including validation failures, 404s, and unhandled exceptions — conform to the response contract.
 
 ```typescript
 // src/common/filters/api-exception.filter.ts
@@ -159,7 +159,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
-    const status = exception instanceof HttpException
+    const httpStatus = exception instanceof HttpException
       ? exception.getStatus()
       : HttpStatus.INTERNAL_SERVER_ERROR;
 
@@ -173,13 +173,16 @@ export class ApiExceptionFilter implements ExceptionFilter {
 
     const errors = Array.isArray(detail) ? detail : [];
 
-    response.status(status).json({
-      type: `https://httpstatuses.com/${status}`,
-      title: HttpStatus[status] || 'Error',
-      status,
-      detail: Array.isArray(detail) ? 'Validation failed' : detail,
-      traceId: uuidv4(),
-      errors,
+    response.status(httpStatus).json({
+      status: false,
+      message: HttpStatus[httpStatus] || 'Error',
+      data: null,
+      error: {
+        type: `https://httpstatuses.com/${httpStatus}`,
+        detail: Array.isArray(detail) ? 'Validation failed' : detail,
+        traceId: uuidv4(),
+        errors,
+      },
     });
   }
 }
@@ -191,7 +194,7 @@ Register globally in `main.ts`:
 app.useGlobalFilters(new ApiExceptionFilter());
 ```
 
-> **Note:** The exception filter is required for contract compliance. Without it, NestJS's default error format (`{ statusCode, message, error }`) does not match the standard error envelope.
+> **Note:** The exception filter is required for contract compliance. Without it, NestJS's default error format (`{ statusCode, message, error }`) does not match the unified envelope (`{ status, message, data, error }`).
 
 ---
 
@@ -274,4 +277,4 @@ import { {Resource}Service } from './{resource}.service';
 export class {Resource}Module {}
 ```
 
-Follow NestJS conventions: `@Controller`, `@Get`, `@Post`, `@ApiTags`, `@ApiBearerAuth`, `@ApiResponse`. If the project uses Prisma instead of TypeORM, adapt the service to use `PrismaService` injection. All controller methods must wrap results in the standard response envelope — see [`references/response-contract.md`](./response-contract.md).
+Follow NestJS conventions: `@Controller`, `@Get`, `@Post`, `@ApiTags`, `@ApiBearerAuth`, `@ApiResponse`. If the project uses Prisma instead of TypeORM, adapt the service to use `PrismaService` injection. All controller methods must wrap results in the unified response envelope (`{ status, message, data, error }`) — see [`references/response-contract.md`](./response-contract.md).

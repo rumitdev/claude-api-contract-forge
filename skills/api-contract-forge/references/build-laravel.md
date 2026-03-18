@@ -135,7 +135,7 @@ class {Resource}Controller extends Controller
             ->get();
 
         return response()->json([
-            'statusCode' => 200,
+            'status' => true,
             'message' => 'Data retrieved',
             'data' => [
                 'items' => {Resource}Resource::collection($items),
@@ -144,6 +144,7 @@ class {Resource}Controller extends Controller
                 'limit' => $limit,
                 'totalPages' => (int) ceil($total / $limit),
             ],
+            'error' => null,
         ]);
     }
 
@@ -152,9 +153,10 @@ class {Resource}Controller extends Controller
         $resource = {Resource}::create($request->validated());
 
         return response()->json([
-            'statusCode' => 201,
+            'status' => true,
             'message' => '{Resource} created',
             'data' => new {Resource}Resource($resource),
+            'error' => null,
         ], 201);
     }
 
@@ -163,9 +165,10 @@ class {Resource}Controller extends Controller
         $resource = {Resource}::findOrFail($id);
 
         return response()->json([
-            'statusCode' => 200,
+            'status' => true,
             'message' => '{Resource} retrieved',
             'data' => new {Resource}Resource($resource),
+            'error' => null,
         ]);
     }
 
@@ -175,9 +178,10 @@ class {Resource}Controller extends Controller
         $resource->update($request->validated());
 
         return response()->json([
-            'statusCode' => 200,
+            'status' => true,
             'message' => '{Resource} updated',
             'data' => new {Resource}Resource($resource->fresh()),
+            'error' => null,
         ]);
     }
 
@@ -295,43 +299,50 @@ class Handler extends ExceptionHandler
     {
         if ($e instanceof ValidationException) {
             return response()->json([
-                'type' => 'validation_error',
-                'title' => 'Validation Failed',
-                'status' => 422,
-                'detail' => 'One or more fields failed validation.',
-                'traceId' => request()->header('X-Trace-Id', (string) \Illuminate\Support\Str::uuid()),
-                'errors' => collect($e->errors())->flatMap(fn ($messages, $field) =>
-                    collect($messages)->map(fn ($msg) => [
-                        'field' => $field,
-                        'message' => $msg,
-                    ])
-                )->values()->all(),
+                'status' => false,
+                'message' => 'Validation Failed',
+                'data' => null,
+                'error' => [
+                    'type' => 'validation_error',
+                    'detail' => 'One or more fields failed validation.',
+                    'traceId' => request()->header('X-Trace-Id', (string) \Illuminate\Support\Str::uuid()),
+                    'errors' => collect($e->errors())->flatMap(fn ($messages, $field) =>
+                        collect($messages)->map(fn ($msg) => [
+                            'field' => $field,
+                            'message' => $msg,
+                        ])
+                    )->values()->all(),
+                ],
             ], 422);
         }
 
         if ($e instanceof ModelNotFoundException) {
             return response()->json([
-                'type' => 'not_found',
-                'title' => 'Resource Not Found',
-                'status' => 404,
-                'detail' => 'The requested resource was not found.',
-                'traceId' => request()->header('X-Trace-Id', (string) \Illuminate\Support\Str::uuid()),
-                'errors' => [],
+                'status' => false,
+                'message' => 'Resource Not Found',
+                'data' => null,
+                'error' => [
+                    'type' => 'not_found',
+                    'detail' => 'The requested resource was not found.',
+                    'traceId' => request()->header('X-Trace-Id', (string) \Illuminate\Support\Str::uuid()),
+                ],
             ], 404);
         }
 
         $status = $e instanceof HttpException ? $e->getStatusCode() : 500;
 
         return response()->json([
-            'type' => 'server_error',
-            'title' => 'Internal Server Error',
-            'status' => $status,
-            'detail' => app()->isProduction() ? 'An unexpected error occurred.' : $e->getMessage(),
-            'traceId' => request()->header('X-Trace-Id', (string) \Illuminate\Support\Str::uuid()),
-            'errors' => [],
+            'status' => false,
+            'message' => 'Internal Server Error',
+            'data' => null,
+            'error' => [
+                'type' => 'server_error',
+                'detail' => app()->isProduction() ? 'An unexpected error occurred.' : $e->getMessage(),
+                'traceId' => request()->header('X-Trace-Id', (string) \Illuminate\Support\Str::uuid()),
+            ],
         ], $status);
     }
 }
 ```
 
-This ensures all error responses — validation, not-found, and server errors — follow the standard error contract with `type`, `title`, `status`, `detail`, `traceId`, and `errors` fields.
+This ensures all error responses — validation, not-found, and server errors — follow the unified envelope (`{ status: false, message, data: null, error: { type, detail, traceId, errors } }`).

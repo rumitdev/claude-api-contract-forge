@@ -161,7 +161,7 @@ Every route needs `@swagger` JSDoc. Include `tags`, `security`, `parameters`, `r
 
 ## File 3: Controller — `src/controllers/{resource}.controller.ts`
 
-> **Important:** The response helpers (`sendSuccess`, `sendPaginatedResponse`, `sendError`) used below MUST produce the standard envelope defined in [`references/response-contract.md`](./response-contract.md). Do not use raw `res.json()` — always go through these helpers to guarantee contract compliance.
+> **Important:** The response helpers (`sendSuccess`, `sendPaginatedResponse`, `sendError`) used below MUST produce the unified envelope (`{ status, message, data, error }`) defined in [`references/response-contract.md`](./response-contract.md). Do not use raw `res.json()` — always go through these helpers to guarantee contract compliance.
 
 ```typescript
 import { Request, Response, NextFunction } from "express";
@@ -173,10 +173,10 @@ export class {Resource}Controller {
   async create{Resource}(req: Request, res: Response): Promise<void> {
     try {
       const result = await {resource}Service.create(req.body);
-      // sendSuccess produces: { statusCode: 201, message: "...", data: { ...result } }
+      // sendSuccess produces: { status: true, message: "...", data: { ...result }, error: null }
       sendSuccess(res, result, req.t("{RESOURCE}_CREATED"), 201);
     } catch (error: any) {
-      // sendError produces: { type: "...", title: "...", status: N, detail: "...", traceId: "...", errors: [...] }
+      // sendError produces: { status: false, message: "...", data: null, error: { type, detail, traceId, errors } }
       sendError(res, req.t(error.message), error.statusCode || 500);
     }
   }
@@ -186,15 +186,15 @@ export class {Resource}Controller {
       const { items, total } = await {resource}Service.findAll(req.query as any);
       const { page, limit } = req.query as any;
       // sendPaginatedResponse produces:
-      // { statusCode: 200, message: "...", data: { items: [...], total, page, limit, totalPages } }
+      // { status: true, message: "...", data: { items: [...], total, page, limit, totalPages }, error: null }
       sendPaginatedResponse(res, items, total, page, limit, req.t("DATA_RETRIEVED"));
     } catch (error: any) {
       sendError(res, req.t("REQUEST_FAILED"), 500, error.message);
     }
   }
 
-  // getById  — use sendSuccess  -> { statusCode: 200, message, data }
-  // update   — use sendSuccess  -> { statusCode: 200, message, data }
+  // getById  — use sendSuccess  -> { status: true, message, data, error: null }
+  // update   — use sendSuccess  -> { status: true, message, data, error: null }
   // delete   — use res.status(204).send()  (empty body, no JSON envelope)
 }
 

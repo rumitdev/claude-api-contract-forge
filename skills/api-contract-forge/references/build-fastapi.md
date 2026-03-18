@@ -55,9 +55,10 @@ from typing import TypeVar, Generic, List
 T = TypeVar("T")
 
 class ApiResponse(BaseModel, Generic[T]):
-    statusCode: int
+    status: bool
     message: str
-    data: T
+    data: Optional[T] = None
+    error: Optional[dict] = None
 
 class PaginatedData(BaseModel, Generic[T]):
     items: List[T]
@@ -67,9 +68,10 @@ class PaginatedData(BaseModel, Generic[T]):
     totalPages: int
 
 class PaginatedResponse(BaseModel, Generic[T]):
-    statusCode: int = 200
+    status: bool = True
     message: str
     data: PaginatedData[T]
+    error: Optional[dict] = None
 ```
 
 Pydantic v2 is the current standard. Use `model_config` instead of the old `class Config`. The `from_attributes=True` setting lets you pass ORM objects directly to response models — this avoids manual dict conversion.
@@ -105,7 +107,7 @@ async def create_{resource}(
 ):
     service = {Resource}Service(db)
     result = service.create(data, current_user)
-    return {"statusCode": 201, "message": "{Resource} created", "data": result}
+    return {"status": True, "message": "{Resource} created", "data": result, "error": None}
 
 @router.get(
     "/",
@@ -123,7 +125,7 @@ async def list_{resources}(
     service = {Resource}Service(db)
     items, total = service.find_all(page, limit, search, status_filter)
     return {
-        "statusCode": 200,
+        "status": True,
         "message": "{Resources} retrieved",
         "data": {
             "items": items,
@@ -132,6 +134,7 @@ async def list_{resources}(
             "limit": limit,
             "totalPages": -(-total // limit),
         },
+        "error": None,
     }
 
 @router.get("/{id}", response_model=ApiResponse[{Resource}Response])
@@ -140,13 +143,13 @@ async def get_{resource}(id: str, db: Session = Depends(get_db)):
     result = service.find_by_id(id)
     if not result:
         raise HTTPException(status_code=404, detail="{Resource} not found")
-    return {"statusCode": 200, "message": "{Resource} retrieved", "data": result}
+    return {"status": True, "message": "{Resource} retrieved", "data": result, "error": None}
 
 @router.put("/{id}", response_model=ApiResponse[{Resource}Response])
 async def update_{resource}(id: str, data: Update{Resource}, db: Session = Depends(get_db)):
     service = {Resource}Service(db)
     result = service.update(id, data)
-    return {"statusCode": 200, "message": "{Resource} updated", "data": result}
+    return {"status": True, "message": "{Resource} updated", "data": result, "error": None}
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_{resource}(id: str, db: Session = Depends(get_db)):
@@ -253,12 +256,14 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     return JSONResponse(
         status_code=exc.status_code,
         content={
-            "type": "about:blank",
-            "title": exc.detail if isinstance(exc.detail, str) else "Error",
-            "status": exc.status_code,
-            "detail": exc.detail if isinstance(exc.detail, str) else str(exc.detail),
-            "traceId": str(uuid.uuid4()),
-            "errors": [],
+            "status": False,
+            "message": exc.detail if isinstance(exc.detail, str) else "Error",
+            "data": None,
+            "error": {
+                "type": "about:blank",
+                "detail": exc.detail if isinstance(exc.detail, str) else str(exc.detail),
+                "traceId": str(uuid.uuid4()),
+            },
         },
     )
 
@@ -271,12 +276,15 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(
         status_code=422,
         content={
-            "type": "about:blank",
-            "title": "Validation Error",
-            "status": 422,
-            "detail": "One or more fields failed validation.",
-            "traceId": str(uuid.uuid4()),
-            "errors": errors,
+            "status": False,
+            "message": "Validation Error",
+            "data": None,
+            "error": {
+                "type": "about:blank",
+                "detail": "One or more fields failed validation.",
+                "traceId": str(uuid.uuid4()),
+                "errors": errors,
+            },
         },
     )
 ```

@@ -86,7 +86,7 @@ module Api
         {resources} = {resources}.offset((page - 1) * limit).limit(limit)
 
         render json: {
-          statusCode: 200,
+          status: true,
           message: "Data retrieved",
           data: {
             items: ActiveModelSerializers::SerializableResource.new({resources}),
@@ -94,7 +94,8 @@ module Api
             page: page,
             limit: limit,
             totalPages: (total.to_f / limit).ceil
-          }
+          },
+          error: nil
         }
       end
 
@@ -104,9 +105,10 @@ module Api
 
         if {resource}.save
           render json: {
-            statusCode: 201,
+            status: true,
             message: "{Resource} created",
-            data: {Resource}Serializer.new({resource})
+            data: {Resource}Serializer.new({resource}),
+            error: nil
           }, status: :created
         else
           render json: error_response({resource}), status: :unprocessable_entity
@@ -116,9 +118,10 @@ module Api
       # GET /api/v1/{resources}/:id
       def show
         render json: {
-          statusCode: 200,
+          status: true,
           message: "{Resource} retrieved",
-          data: {Resource}Serializer.new(@{resource})
+          data: {Resource}Serializer.new(@{resource}),
+          error: nil
         }
       end
 
@@ -126,9 +129,10 @@ module Api
       def update
         if @{resource}.update({resource}_params)
           render json: {
-            statusCode: 200,
+            status: true,
             message: "{Resource} updated",
-            data: {Resource}Serializer.new(@{resource})
+            data: {Resource}Serializer.new(@{resource}),
+            error: nil
           }
         else
           render json: error_response(@{resource}), status: :unprocessable_entity
@@ -153,12 +157,15 @@ module Api
 
       def error_response(resource)
         {
-          type: "validation_error",
-          title: "Validation Failed",
-          status: 422,
-          detail: "One or more fields failed validation.",
-          traceId: request.headers["X-Trace-Id"] || SecureRandom.uuid,
-          errors: resource.errors.map { |e| { field: e.attribute.to_s.camelize(:lower), message: e.full_message } }
+          status: false,
+          message: "Validation Failed",
+          data: nil,
+          error: {
+            type: "validation_error",
+            detail: "One or more fields failed validation.",
+            traceId: request.headers["X-Trace-Id"] || SecureRandom.uuid,
+            errors: resource.errors.map { |e| { field: e.attribute.to_s.camelize(:lower), message: e.full_message } }
+          }
         }
       end
     end
@@ -219,26 +226,30 @@ class ApplicationController < ActionController::API
 
   def not_found(exception)
     render json: {
-      type: "not_found",
-      title: "Resource Not Found",
-      status: 404,
-      detail: exception.message,
-      traceId: request.headers["X-Trace-Id"] || SecureRandom.uuid,
-      errors: []
+      status: false,
+      message: "Resource Not Found",
+      data: nil,
+      error: {
+        type: "not_found",
+        detail: exception.message,
+        traceId: request.headers["X-Trace-Id"] || SecureRandom.uuid
+      }
     }, status: :not_found
   end
 
   def internal_error(exception)
     render json: {
-      type: "server_error",
-      title: "Internal Server Error",
-      status: 500,
-      detail: Rails.env.production? ? "An unexpected error occurred." : exception.message,
-      traceId: request.headers["X-Trace-Id"] || SecureRandom.uuid,
-      errors: []
+      status: false,
+      message: "Internal Server Error",
+      data: nil,
+      error: {
+        type: "server_error",
+        detail: Rails.env.production? ? "An unexpected error occurred." : exception.message,
+        traceId: request.headers["X-Trace-Id"] || SecureRandom.uuid
+      }
     }, status: :internal_server_error
   end
 end
 ```
 
-This ensures all error responses — validation, not-found, and server errors — follow the standard error contract with `type`, `title`, `status`, `detail`, `traceId`, and `errors` fields. Validation errors are handled inline in the controller via the `error_response` helper.
+This ensures all error responses — validation, not-found, and server errors — follow the unified envelope (`{ status: false, message, data: null, error: { type, detail, traceId, errors } }`). Validation errors are handled inline in the controller via the `error_response` helper.

@@ -66,18 +66,19 @@ enum class {Resource}Status {
 ## File 1b: Response Wrappers — `dto/ResponseWrappers.kt`
 
 ```kotlin
-/** Standard API envelope — every response (except 204) uses this. */
+/** Unified API envelope — every response (except 204) uses this. */
 data class ApiResponse<T>(
-    val statusCode: Int,
+    val status: Boolean,
     val message: String,
-    val data: T
+    val data: T?,
+    val error: ErrorDetail? = null
 ) {
     companion object {
-        fun <T> success(data: T, message: String = "Success", statusCode: Int = 200) =
-            ApiResponse(statusCode = statusCode, message = message, data = data)
+        fun <T> success(data: T, message: String = "Success") =
+            ApiResponse(status = true, message = message, data = data, error = null)
 
         fun <T> created(data: T, message: String = "Created") =
-            ApiResponse(statusCode = 201, message = message, data = data)
+            ApiResponse(status = true, message = message, data = data, error = null)
     }
 }
 
@@ -90,15 +91,17 @@ data class PaginatedResponse<T>(
     val totalPages: Int
 )
 
-/** Standard error envelope (RFC 7807-inspired) */
+/** Error detail — nested inside ApiResponse.error on failure */
 data class ErrorDetail(
     val type: String,
-    val title: String,
-    val status: Int,
     val detail: String,
     val traceId: String? = null,
     val errors: List<String> = emptyList()
 )
+
+/** Helper to create error responses */
+fun errorResponse(message: String, errorDetail: ErrorDetail): ApiResponse<Nothing> =
+    ApiResponse(status = false, message = message, data = null, error = errorDetail)
 ```
 
 ---
@@ -282,43 +285,37 @@ class ResourceNotFoundException(message: String) : RuntimeException(message)
 class GlobalExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException::class)
-    fun handleNotFound(ex: ResourceNotFoundException, request: WebRequest): ResponseEntity<ErrorDetail> {
+    fun handleNotFound(ex: ResourceNotFoundException, request: WebRequest): ResponseEntity<ApiResponse<Nothing>> {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(
-            ErrorDetail(
+            errorResponse("Resource Not Found", ErrorDetail(
                 type = "https://httpstatuses.com/404",
-                title = "Not Found",
-                status = 404,
                 detail = ex.message ?: "Resource not found",
                 traceId = UUID.randomUUID().toString()
-            )
+            ))
         )
     }
 
     @ExceptionHandler(MethodArgumentNotValidException::class)
-    fun handleValidation(ex: MethodArgumentNotValidException, request: WebRequest): ResponseEntity<ErrorDetail> {
+    fun handleValidation(ex: MethodArgumentNotValidException, request: WebRequest): ResponseEntity<ApiResponse<Nothing>> {
         val fieldErrors = ex.bindingResult.fieldErrors.map { "${it.field}: ${it.defaultMessage}" }
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
-            ErrorDetail(
+            errorResponse("Validation Error", ErrorDetail(
                 type = "https://httpstatuses.com/400",
-                title = "Bad Request",
-                status = 400,
                 detail = "Validation failed",
                 traceId = UUID.randomUUID().toString(),
                 errors = fieldErrors
-            )
+            ))
         )
     }
 
     @ExceptionHandler(Exception::class)
-    fun handleGeneric(ex: Exception, request: WebRequest): ResponseEntity<ErrorDetail> {
+    fun handleGeneric(ex: Exception, request: WebRequest): ResponseEntity<ApiResponse<Nothing>> {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
-            ErrorDetail(
+            errorResponse("Internal Server Error", ErrorDetail(
                 type = "https://httpstatuses.com/500",
-                title = "Internal Server Error",
-                status = 500,
                 detail = ex.message ?: "An unexpected error occurred",
                 traceId = UUID.randomUUID().toString()
-            )
+            ))
         )
     }
 }
