@@ -89,7 +89,7 @@ If the user specifies exact operations, generate only those — nothing more. If
 
 Generate files following the detected project conventions. The output should match the existing codebase patterns exactly — same file naming, same folder structure, same code style, same import patterns.
 
-**IMPORTANT: Always read `references/response-contract.md` first.** This defines the standard response envelope that ALL frameworks must produce. Every generated controller/handler must wrap responses in the standard `{ statusCode, message, data }` shape. No framework-specific response formats are allowed — the JSON output must be identical regardless of backend language.
+**IMPORTANT: Always read `references/response-contract.md` first.** This defines the unified response envelope that ALL frameworks must produce. Every generated controller/handler must wrap responses in the `{ status, message, data, error }` shape. No framework-specific response formats are allowed — the JSON output must be identical regardless of backend language.
 
 **Then read the appropriate framework reference for code templates:**
 
@@ -326,5 +326,6 @@ Always check for these common API anti-patterns:
 | `references/build-laravel.md` | BUILD mode + Laravel detected |
 | `references/build-rails.md` | BUILD mode + Rails detected |
 | `references/build-patterns.md` | BUILD mode + special requirements (file upload, soft delete, relationship loading, advanced filtering) |
+| `references/build-tests.md` | Optional — contract test templates for all 8 frameworks (use when team wants to verify response envelope) |
 | `references/analyze-generators.md` | ANALYZE mode Phase 4 (generating contract artifacts) |
 | `references/industry-standards.md` | BUILD mode Phase 0.5 (compliance checklist) or ANALYZE mode (flagging issues) |
